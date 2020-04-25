@@ -7,8 +7,7 @@ defmodule Jetlog.Application do
 
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Jetlog.Worker.start_link(arg)
-      # {Jetlog.Worker, arg}
+      {Jetlog.Repo, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
