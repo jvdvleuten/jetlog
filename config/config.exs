@@ -25,6 +25,3 @@ config :libcluster,
     #     ]
     #   ]
   ]
-
-config :swarm,
-  debug: false

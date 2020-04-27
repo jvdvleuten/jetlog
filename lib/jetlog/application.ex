@@ -6,10 +6,7 @@ defmodule Jetlog.Application do
   use Application
 
   def start(_type, _args) do
-    topologies = Application.get_env(:libcluster, :topologies)
-
     children = [
-      {Cluster.Supervisor, [topologies, [name: Jetlog.ClusterSupervisor]]},
       {Jetlog.Repo, []},
       {Jetlog.LogbookEntry.Supervisor, []}
     ]

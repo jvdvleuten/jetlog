@@ -8,7 +8,7 @@ defmodule Jetlog.LogbookEntry.Supervisor do
   end
 
   def start_child(aggregate_id) do
-    spec = {Jetlog.LogbookEntry, [aggregate_id]}
+    spec = {Jetlog.LogbookEntry, aggregate_id}
     DynamicSupervisor.start_child(__MODULE__, spec)
   end
 
@@ -20,63 +20,74 @@ end
 
 defmodule Jetlog.LogbookEntry do
   use GenServer, restart: :temporary
+  require Ecto.Query
 
-  @moduledoc """
-  This is the worker process, in this case, it simply posts on a
-  random recurring interval to stdout.
-  """
+  defp server_name(aggregate_id) do
+    {:via, :syn, aggregate_id}
+  end
+
   def start_link(aggregate_id) do
-    GenServer.start_link(__MODULE__, aggregate_id)
+    GenServer.start_link(__MODULE__, aggregate_id, name: server_name(aggregate_id))
   end
 
-  def init(_name) do
-    {:ok, :rand.uniform(5_000), 0}
+  def init(aggregate_id) do
+    events =
+      Jetlog.LogbookEvent
+      |> Ecto.Query.where(aggregate_id: ^aggregate_id)
+      |> Jetlog.Repo.all()
+
+    state = Enum.reduce(events, %{}, &apply_event/2)
+    IO.inspect(state)
+    aggregate = %{id: aggregate_id, events: events, state: state}
+    {:ok, aggregate}
   end
 
-  # called when a handoff has been initiated due to changes
-  # in cluster topology, valid response values are:
-  #
-  #   - `:restart`, to simply restart the process on the new node
-  #   - `{:resume, state}`, to hand off some state to the new process
-  #   - `:ignore`, to leave the process running on its current node
-  #
-  def handle_call({:swarm, :begin_handoff}, _from, delay) do
-    IO.puts("#{inspect(self())} :begin_handoff")
-    {:reply, {:resume, delay}, delay}
+  def merge_events(aggregate_id, events) do
+    GenServer.cast(server_name(aggregate_id), {:merge_events, events})
   end
 
-  # called after the process has been restarted on its new node,
-  # and the old process' state is being handed off. This is only
-  # sent if the return to `begin_handoff` was `{:resume, state}`.
-  # **NOTE**: This is called *after* the process is successfully started,
-  # so make sure to design your processes around this caveat if you
-  # wish to hand off state like this.
-  def handle_cast({:swarm, :end_handoff, delay}, _state) do
-    IO.puts("#{inspect(self())} :end_handoff")
-    {:noreply, delay}
+  def handle_cast({:merge_events, events}, aggregate) do
+    merged_events = merge_events(events, aggregate, [])
+
+    Jetlog.Repo.insert_all(Jetlog.LogbookEvent, merged_events)
+    new_state = Enum.reduce(merged_events, aggregate.state, &apply_event/2)
+
+    new_aggregate =
+      aggregate
+      |> Map.put(:state, new_state)
+      |> Map.put(:events, aggregate.events ++ merged_events)
+
+    {:noreply, new_aggregate}
   end
 
-  # called when a network split is healed and the local process
-  # should continue running, but a duplicate process on the other
-  # side of the split is handing off its state to us. You can choose
-  # to ignore the handoff state, or apply your own conflict resolution
-  # strategy
-  def handle_cast({:swarm, :resolve_conflict, _delay}, state) do
-    IO.puts("#{inspect(self())} :resolve_conflict")
-    {:noreply, state}
+  def apply_event(%{name: "flightnumber_changed", body: body}, state) do
+    state
+    |> Map.put(:flightnumber, body["flightnumber"])
+
+    # |> Map.put(:flightnumber_v, increase_vector(state, :flightnumber_v))
   end
 
-  def handle_info(:timeout, delay) do
-    IO.puts("#{delay} says hi! #{inspect(self())}")
-    Process.send_after(self(), :timeout, delay)
-    {:noreply, delay}
+  def apply_event(%{name: "flightnumber_merged", body: body}, state) do
+    state
+    |> Map.put(:flightnumber, body.flightnumber)
+
+    # |> Map.put(:flightnumber_v, increase_vector(state, :flightnumber_v))
   end
 
-  # this message is sent when this process should die
-  # because it is being moved, use this as an opportunity
-  # to clean up
-  def handle_info({:swarm, :die}, state) do
-    IO.puts("#{inspect(self())} :die")
-    {:stop, :shutdown, state}
+  def merge_events([head | tail], aggregate, events) do
+    new_events =
+      merge_event(head, aggregate)
+      |> Map.put(:aggregate_id, aggregate.id)
+      |> Map.put(:sequence, length(aggregate.events))
+
+    merge_events(tail, aggregate, [new_events | events])
+  end
+
+  def merge_events([], _aggregate, events) do
+    events
+  end
+
+  def merge_event(event = %{name: "flightnumber_changed", body: body}, state) do
+    event
   end
 end
