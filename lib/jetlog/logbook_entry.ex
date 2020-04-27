@@ -40,11 +40,12 @@ defmodule Jetlog.LogbookEntry do
   @primary_key false
   embedded_schema do
     field(:flightnumber, :string)
+    field(:flightnumber_v, :integer)
   end
 
   def changeset(event, params \\ %{}) do
     event
-    |> Ecto.Changeset.cast(params, [:flightnumber])
+    |> Ecto.Changeset.cast(params, [:flightnumber, :flightnumber_v])
     |> Ecto.Changeset.validate_required([:flightnumber])
   end
 
@@ -61,21 +62,10 @@ defmodule Jetlog.LogbookEntry do
       Jetlog.LogbookEvent
       |> Ecto.Query.where(aggregate_id: ^aggregate_id)
       |> Jetlog.Repo.all()
-      |> Enum.map(&cast_body/1)
 
     state = Enum.reduce(events, %{}, &apply_event/2)
     aggregate = %{id: aggregate_id, events: events, state: state}
     {:ok, aggregate}
-  end
-
-  def cast_body(event) do
-    struct =
-      case event.name do
-        "flightnumber_changed" -> Jetlog.LogbookEntry.FlightnumberChanged
-      end
-
-    new_body = struct(struct) |> struct.changeset(event.body) |> Ecto.Changeset.apply_changes()
-    event |> Map.put(:body, new_body)
   end
 
   def merge_events(aggregate_id, events) do
@@ -96,14 +86,7 @@ defmodule Jetlog.LogbookEntry do
     {:noreply, new_aggregate}
   end
 
-  def apply_event(%{name: "flightnumber_changed", body: body}, state) do
-    state
-    |> Map.put(:flightnumber, body.flightnumber)
-
-    # |> Map.put(:flightnumber_v, increase_vector(state, :flightnumber_v))
-  end
-
-  def apply_event(%{name: "flightnumber_merged", body: body}, state) do
+  def apply_event(event = %{body: %Jetlog.LogbookEntry.FlightnumberChanged{} = body}, state) do
     state
     |> Map.put(:flightnumber, body.flightnumber)
 
@@ -123,7 +106,7 @@ defmodule Jetlog.LogbookEntry do
     events
   end
 
-  def merge_event(event = %{name: "flightnumber_changed", body: body}, state) do
+  def merge_event(event = %{body: %Jetlog.LogbookEntry.FlightnumberChanged{}}, _state) do
     event
   end
 end
