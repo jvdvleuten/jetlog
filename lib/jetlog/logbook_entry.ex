@@ -18,9 +18,35 @@ defmodule Jetlog.LogbookEntry.Supervisor do
   end
 end
 
+defmodule Jetlog.LogbookEntry.FlightnumberChanged do
+  use Ecto.Schema
+  @primary_key false
+  embedded_schema do
+    field(:flightnumber, :string)
+  end
+
+  def changeset(event, params \\ %{}) do
+    event
+    |> Ecto.Changeset.cast(params, [:flightnumber])
+    |> Ecto.Changeset.validate_required([:flightnumber])
+  end
+end
+
 defmodule Jetlog.LogbookEntry do
   use GenServer, restart: :temporary
+  use Ecto.Schema
   require Ecto.Query
+
+  @primary_key false
+  embedded_schema do
+    field(:flightnumber, :string)
+  end
+
+  def changeset(event, params \\ %{}) do
+    event
+    |> Ecto.Changeset.cast(params, [:flightnumber])
+    |> Ecto.Changeset.validate_required([:flightnumber])
+  end
 
   defp server_name(aggregate_id) do
     {:via, :syn, aggregate_id}
@@ -35,11 +61,21 @@ defmodule Jetlog.LogbookEntry do
       Jetlog.LogbookEvent
       |> Ecto.Query.where(aggregate_id: ^aggregate_id)
       |> Jetlog.Repo.all()
+      |> Enum.map(&cast_body/1)
 
     state = Enum.reduce(events, %{}, &apply_event/2)
-    IO.inspect(state)
     aggregate = %{id: aggregate_id, events: events, state: state}
     {:ok, aggregate}
+  end
+
+  def cast_body(event) do
+    struct =
+      case event.name do
+        "flightnumber_changed" -> Jetlog.LogbookEntry.FlightnumberChanged
+      end
+
+    new_body = struct(struct) |> struct.changeset(event.body) |> Ecto.Changeset.apply_changes()
+    event |> Map.put(:body, new_body)
   end
 
   def merge_events(aggregate_id, events) do
@@ -62,7 +98,7 @@ defmodule Jetlog.LogbookEntry do
 
   def apply_event(%{name: "flightnumber_changed", body: body}, state) do
     state
-    |> Map.put(:flightnumber, body["flightnumber"])
+    |> Map.put(:flightnumber, body.flightnumber)
 
     # |> Map.put(:flightnumber_v, increase_vector(state, :flightnumber_v))
   end
