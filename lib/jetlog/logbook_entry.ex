@@ -20,6 +20,7 @@ end
 
 defmodule Jetlog.LogbookEntry.FlightnumberChanged do
   use Ecto.Schema
+  use Jetlog.EctoLogbookEvent
   @primary_key false
   embedded_schema do
     field(:flightnumber, :string)
