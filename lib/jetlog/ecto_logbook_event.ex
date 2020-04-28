@@ -1,41 +1,36 @@
 defmodule Jetlog.EctoLogbookEvent do
+  @before_compile Jetlog.EctoLogbookEventHelper
   use Ecto.Type
   def type, do: :map
 
   defmacro __using__(_options) do
     quote do
-      def __tagged_ecto_logbook_event, do: :ok
+      current_config = Application.get_env(:jetlog, :__ecto_logbook_events, %{})
+      name = Module.split(__MODULE__) |> List.last()
+      new_config = current_config |> Map.put(name, __MODULE__)
+      :ok = Application.put_env(:jetlog, :__ecto_logbook_events, new_config, persistent: true)
+      :ok
     end
   end
 
-  def list_tagged_modules do
-    {:ok, modules} = :application.get_key(Application.get_application(__MODULE__), :modules)
-
-    modules
-    |> Enum.filter(fn m ->
-      m.__info__(:functions) |> Enum.any?(&match?({:__tagged_ecto_logbook_event, 0}, &1))
-    end)
+  defp get_fully_qualified_name(name) do
+    Application.get_env(:jetlog, :__ecto_logbook_events) |> Map.get(name)
   end
 
   def cast({name, body}) do
-    require IEx
-    IEx.pry()
+    full_name = get_fully_qualified_name(name)
 
-    struct(name)
-    |> name.changeset(body)
+    struct(full_name)
+    |> full_name.changeset(body)
     |> Ecto.Changeset.apply_changes()
   end
 
   def load(data) when is_map(data) do
-    require IEx
-    IEx.pry()
-    name = data["name"] |> String.to_existing_atom()
-    {:ok, cast({name, data["body"]})}
+    {:ok, cast({data["name"], data["body"]})}
   end
 
   def dump(%name{} = event) when is_map(event) do
-    require IEx
-    IEx.pry()
+    name = Module.split(name) |> List.last()
     data = %{name: name, body: Map.from_struct(event)}
     {:ok, data}
   end

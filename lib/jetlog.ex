@@ -1,20 +1,4 @@
-defmodule Jetlog.Setup do
-  defmacro setup() do
-    quote do
-      IO.inspect(:application.get_key(:jetlog, :modules))
-      alias Jetlog.LogbookEntry.FlightnumberChanged
-    end
-  end
-end
-
 defmodule Jetlog do
-  require Jetlog.Setup
-  Jetlog.Setup.setup()
-
-  def test() do
-    %FlightnumberChanged{}
-  end
-
   def stress_test() do
     Enum.each(0..1, fn x ->
       id = Ecto.UUID.generate()
