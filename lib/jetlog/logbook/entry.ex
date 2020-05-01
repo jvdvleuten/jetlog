@@ -16,11 +16,34 @@ defmodule Jetlog.Logbook.Entry.Supervisor do
   end
 end
 
+defmodule Jetlog.Logbook.Database.Ecto do
+  alias Jetlog.Logbook.Entry
+  require Ecto.Query
+
+  def get_events(aggregate_id) do
+    Entry.Event
+    |> Ecto.Query.where(aggregate_id: ^aggregate_id)
+    |> Ecto.Query.order_by(asc: :sequence)
+    |> Jetlog.Repo.all()
+  end
+
+  def save_events(events) do
+    with multi <- Ecto.Multi.new() do
+      events
+      |> Enum.reduce(multi, &insert/2)
+      |> Jetlog.Repo.transaction()
+    end
+  end
+
+  defp insert(event, multi) do
+    Ecto.Multi.insert(multi, event.id, event)
+  end
+end
+
 defmodule Jetlog.Logbook.Entry do
   alias Jetlog.Logbook.Entry
   use GenServer, restart: :temporary
   use Ecto.Schema
-  require Ecto.Query
 
   @primary_key false
   embedded_schema do
@@ -50,12 +73,8 @@ defmodule Jetlog.Logbook.Entry do
   # GenServer
 
   def init(aggregate_id) do
-    events =
-      Entry.Event
-      |> Ecto.Query.where(aggregate_id: ^aggregate_id)
-      |> Ecto.Query.order_by(asc: :sequence)
-      |> Jetlog.Repo.all()
-
+    events = Jetlog.Logbook.Database.Ecto.get_events(aggregate_id)
+    IO.inspect(events)
     {:ok, state} = apply_events(events)
 
     aggregate = %{id: aggregate_id, events: events, state: state}
@@ -64,6 +83,8 @@ defmodule Jetlog.Logbook.Entry do
   end
 
   def apply_events(events, state \\ %__MODULE__{}) do
+    IO.puts("APPLY EVENTS")
+
     Enum.reduce(events, state, &Entry.Event.apply/2)
     |> changeset()
     |> Ecto.Changeset.apply_action(:apply_events)
@@ -74,12 +95,7 @@ defmodule Jetlog.Logbook.Entry do
 
     {:ok, new_state} = apply_events(merged_events, aggregate.state)
 
-    {:ok, _changed} =
-      with multi <- Ecto.Multi.new() do
-        merged_events
-        |> Enum.reduce(multi, &insert/2)
-        |> Jetlog.Repo.transaction()
-      end
+    {:ok, _changed} = Jetlog.Logbook.Database.Ecto.save_events(merged_events)
 
     new_aggregate =
       aggregate
@@ -87,9 +103,5 @@ defmodule Jetlog.Logbook.Entry do
       |> Map.put(:events, aggregate.events ++ merged_events)
 
     {:noreply, new_aggregate}
-  end
-
-  defp insert(event, multi) do
-    Ecto.Multi.insert(multi, event.id, event)
   end
 end

@@ -8,7 +8,7 @@ defmodule Jetlog do
       id = Ecto.UUID.generate()
       {:ok, _pid} = Jetlog.Logbook.Entry.Supervisor.start_child(id)
 
-      Enum.each(0..Enum.random(0..max), fn y ->
+      Enum.each(0..Enum.random(0..1000), fn y ->
         Jetlog.Logbook.Entry.merge_event(
           id,
           %Jetlog.Logbook.Entry.Event{
