@@ -8,7 +8,7 @@ defmodule Jetlog.Application do
   def start(_type, _args) do
     children = [
       {Jetlog.Repo, []},
-      {Jetlog.LogbookEntry.Supervisor, []}
+      {Jetlog.Logbook.Entry.Supervisor, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
