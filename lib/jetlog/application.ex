@@ -6,9 +6,12 @@ defmodule Jetlog.Application do
   use Application
 
   def start(_type, _args) do
+    topologies = Application.get_env(:libcluster, :topologies)
+
     children = [
       {Jetlog.Repo, []},
-      {Jetlog.Logbook.Entry.Supervisor, []}
+      {Jetlog.Logbook.Entry.Supervisor, []},
+      {Cluster.Supervisor, [topologies, [name: Jetlog.ClusterSupervisor]]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -57,7 +57,7 @@ defmodule Jetlog.Logbook.Entry do
   end
 
   defp server_name(aggregate_id) do
-    {:via, :syn, aggregate_id}
+    {:global, aggregate_id}
   end
 
   # API
@@ -74,7 +74,6 @@ defmodule Jetlog.Logbook.Entry do
 
   def init(aggregate_id) do
     events = Jetlog.Logbook.Database.Ecto.get_events(aggregate_id)
-    IO.inspect(events)
     {:ok, state} = apply_events(events)
 
     aggregate = %{id: aggregate_id, events: events, state: state}
@@ -83,8 +82,6 @@ defmodule Jetlog.Logbook.Entry do
   end
 
   def apply_events(events, state \\ %__MODULE__{}) do
-    IO.puts("APPLY EVENTS")
-
     Enum.reduce(events, state, &Entry.Event.apply/2)
     |> changeset()
     |> Ecto.Changeset.apply_action(:apply_events)

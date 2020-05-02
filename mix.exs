@@ -25,7 +25,8 @@ defmodule Jetlog.MixProject do
       {:ecto_sql, "~> 3.0"},
       {:postgrex, ">= 0.0.0"},
       {:jason, "~> 1.0"},
-      {:syn, "~> 2.1"}
+      # {:syn, "~> 2.1"},
+      {:libcluster, "~> 3.2"}
     ]
   end
 end
