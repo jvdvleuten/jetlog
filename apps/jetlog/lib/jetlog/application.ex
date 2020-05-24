@@ -9,13 +9,16 @@ defmodule Jetlog.Application do
     topologies = Application.get_env(:libcluster, :topologies)
 
     children = [
+      {Cluster.Supervisor, [topologies, [name: Jetlog.ClusterSupervisor]]},
+      # Start the Ecto repository
       {Jetlog.Repo, []},
-      {Jetlog.Logbook.Entry.Supervisor, []},
-      {Cluster.Supervisor, [topologies, [name: Jetlog.ClusterSupervisor]]}
+      # Start the PubSub system
+      {Phoenix.PubSub, name: Jetlog.PubSub},
+      # Start a worker by calling: Jetlog.Worker.start_link(arg)
+      {Jetlog.Logbook.Entry.Supervisor, []}
+      # {Jetlog.Worker, arg}
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Jetlog.Supervisor]
     Supervisor.start_link(children, opts)
   end
